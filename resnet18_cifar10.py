@@ -12,7 +12,7 @@ from cka_compare import CKA
 # 从新的 models.py 中导入所有需要的组件
 from models import SNNBasicBlock, RebuiltSNNResNet, rebuild_snn_resnet18
 from evaluate import evaluate_ann, evaluate_snn
-from train_snn_copy import train_snn
+from train_snn import train_snn
 
 # def rebuild_resnet_structure(converted_snn_model, original_resnet):
 #     """

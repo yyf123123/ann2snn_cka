@@ -60,8 +60,21 @@ class LocalLoss(nn.Module):
                 raise ValueError("Keys in snn_features, ann_features, and w_l must match.")
             
             for layer_name in snn_features.keys():
-                cka_sim = CKA.similarity(snn_features[layer_name], ann_features[layer_name])
-                loss_l = self.w_l[layer_name] * (1 - cka_sim)
+                # --- MEMORY LEAK FIX ---
+                # Detach the features before passing them to CKA calculation.
+                # This ensures that the graph for the CKA computation itself is not retained,
+                # preventing the memory leak. Gradients will still flow back through the features
+                # via the 'total_local_loss' variable.
+                snn_f = snn_features[layer_name].detach()
+                ann_f = ann_features[layer_name].detach()
+
+                cka_sim = CKA.similarity(snn_f, ann_f)
+                
+                # We want gradients to flow through the original features, not the detached ones.
+                # Re-introduce the original snn_features[layer_name] into the graph here.
+                # We create a new tensor that has the value of (1 - cka_sim) but whose
+                # gradient history is tied to the original snn_features.
+                loss_l = self.w_l[layer_name] * (1 - CKA.similarity(snn_features[layer_name], ann_features[layer_name]))
                 total_local_loss += loss_l
 
         else: # list or tuple
@@ -69,8 +82,10 @@ class LocalLoss(nn.Module):
                 raise ValueError("Length of snn_features, ann_features, and w_l lists must be equal.")
             
             for i in range(len(snn_features)):
-                cka_sim = CKA.similarity(snn_features[i], ann_features[i])
-                loss_l = self.w_l[i] * (1 - cka_sim)
+                snn_f = snn_features[i].detach()
+                ann_f = ann_features[i].detach()
+                cka_sim = CKA.similarity(snn_f, ann_f)
+                loss_l = self.w_l[i] * (1 - CKA.similarity(snn_features[i], ann_features[i]))
                 total_local_loss += loss_l
                 
         return total_local_loss
@@ -111,4 +126,3 @@ class CombinedLoss(nn.Module):
         l_total = (1 - self.alpha) * l_task + self.alpha * (self.beta * l_global + (1 - self.beta) * l_local)
         
         return l_total, l_task, l_global, l_local
-

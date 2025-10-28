@@ -12,107 +12,89 @@ from cka_compare import CKA
 # 从新的 models.py 中导入所有需要的组件
 from models import SNNBasicBlock, RebuiltSNNResNet, rebuild_snn_resnet18
 from evaluate import evaluate_ann, evaluate_snn
-from train_snn import train_snn
+from train_snn_copy import train_snn
 
-# def rebuild_resnet_structure(converted_snn_model, original_resnet):
-#     """
-#     This function's only job is now to parse the flat model and pass the
-#     resulting dictionaries to the RebuiltSNNResNet class constructor.
-#     """
-#     snn_modules = dict(converted_snn_model.named_modules())
-#     snn_tailor_modules = {}
+import torchvision
+import torch
+
+def get_data_loaders(batch_size: int, data_dir: str = '/home/lbz/git-hub/datasets'):
+    """准备CIFAR-10的数据加载器，包含数据增强。"""
+    print("正在准备数据加载器...")
+
+    transform_train = torchvision.transforms.Compose([
+        torchvision.transforms.RandomCrop(32, padding=4),
+        torchvision.transforms.RandomHorizontalFlip(),
+        torchvision.transforms.AutoAugment(torchvision.transforms.AutoAugmentPolicy.CIFAR10),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    transform_test = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    trainset = torchvision.datasets.CIFAR10(
+        root=data_dir, train=True, download=True, transform=transform_train)
+    trainloader = torch.utils.data.DataLoader(
+        trainset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+
+    testset = torchvision.datasets.CIFAR10(
+        root=data_dir, train=False, download=True, transform=transform_test)
+    testloader = torch.utils.data.DataLoader(
+        testset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
     
-#     # Parsing logic remains the same...
-#     for name, module in snn_modules.items():
-#         if 'snn tailor' in name:
-#             # ... (the parsing code is unchanged)
-#             name_parts = name.split('.')
-#             if len(name_parts) >= 3:
-#                 try:
-#                     for part in name_parts:
-#                         if part.isdigit():
-#                             idx = int(part)
-#                             if name_parts[-1].isdigit():
-#                                 parent_idx = idx
-#                                 sub_idx = int(name_parts[-1])
-#                                 key = f"{parent_idx}.{sub_idx}"
-#                                 snn_tailor_modules[key] = module
-#                             break
-#                 except (ValueError, IndexError):
-#                     print(f"Warning: Could not parse index from {name}")
-#                     continue
-
-#     # ✅ The function no longer defines a local helper function.
-#     # It just passes the two prepared dictionaries to the class constructor.
-#     return RebuiltSNNResNet(snn_modules=snn_modules,
-#                             snn_tailor_modules=snn_tailor_modules)
+    return trainloader, testloader
 
 def main():
     torch.random.manual_seed(0)
     torch.cuda.manual_seed(0)
-    device = 'cuda:3'
+    device = 'cuda:0'
     use_pretrained = True
     dataset_dir = '/home/lbz/git-hub/datasets'
-    weights_path = '/home/lbz/git-hub/pretrained_models/SJ-cifar10-resnet18_model-sample.pth'
-    snn_save_path = '/home/lbz/git-hub/pretrained_models/SJ-cifar10-resnet18_SNN.pth'
+    # 自己从0训练的ANN模型，96.39%的准确率
+    weights_path = '/home/lbz/git-hub/pretrained_models/ann_resnet18_cifar10_best.pth'
+    snn_save_path = '/home/lbz/git-hub/pretrained_models/MY-cifar10-resnet18_SNN.pth'
+
     batch_size = 100
-    T=4
+    T=2
     fine_tune_epochs = 100
     learning_rate = 1e-5
     alpha = 0.5
-    beta = 1.0
+    beta = 0.2
     temperature = 2.0
-
-    transform = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-    ])
+    snnmodel_save_path = f"(T={T}_{alpha},{beta})best_snn_model.pth"
+    # 数据加载器
+    train_data_loader, test_data_loader = get_data_loaders(batch_size, dataset_dir)
 
     model = model_cifar10_resnet.ResNet18()
     # 如果 use_pretrained = True 就使用model.load_state_dict()。否则使用train函数把权重保存到weights_path地址。
     model.load_state_dict(torch.load(weights_path))
 
-    train_data_dataset = torchvision.datasets.CIFAR10(
-        root=dataset_dir,
-        train=True,
-        transform=transform,
-        download=True)
-    train_data_loader = torch.utils.data.DataLoader(
-        dataset=train_data_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        drop_last=False)
-    test_data_dataset = torchvision.datasets.CIFAR10(
-        root=dataset_dir,
-        train=False,
-        transform=transform,
-        download=True)
-    test_data_loader = torch.utils.data.DataLoader(
-        dataset=test_data_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        drop_last=False)
-
-
-    print('ANN accuracy: 94.57%')
+    print('ANN accuracy: ')
     model.to(device)
-    # acc_ann = evaluate_ann(model, test_data_loader, device)
-    # print(f'Validating Accuracy: {acc_ann:.2f}%')
+    acc_ann = evaluate_ann(model, test_data_loader, device)
+    print(f'Validating Accuracy: {acc_ann:.2f}%')
 
     # print('---------------------------------------------')
     # print('Converting using 99.9% RobustNorm')
     # model_converter = ann2snn.Converter(mode='99.9%', dataloader=train_data_loader)
     # snn_model = model_converter(model)
-    # rebuilt_snn = rebuild_snn_resnet18(snn_model)
-    # print(rebuilt_snn)
+    # print(f'(T={T})Spikingjelly_snn_model accuracy:  ')
+    # acc_snn = evaluate_snn(snn_model, test_data_loader, device, time_steps = T, save_path_prefix = None)
+
+    # rebuilt_snn = rebuild_snn_resnet18(model, snn_model)
     # rebuilt_snn.to(device)
-    # acc_snn = evaluate_snn(rebuilt_snn, test_data_loader, device, time_steps = T, save_path_prefix = None)
-    # 新增保存
+
     # torch.save(rebuilt_snn, snn_save_path)
     # print('SNN structure rebuilt successfully.save path:', snn_save_path)
+
+    # print('ANN模型')
     # print(model)
+    # print('SNN模型')
     # print(snn_model)
-    
+    # print('SNN模型结构重建成功。')
+    # print(rebuilt_snn)
     # 加载
     snn_loaded_model = torch.load(snn_save_path, weights_only=False)
     # print(snn_loaded_model)
@@ -139,7 +121,7 @@ def main():
     hsic, model1_names, model2_names = cka.inference(loader=test_data_loader)
     
     hsic = hsic.cpu().numpy()
-
+    print("HSIC matrix between matched layers:")
     # ==================== 新增代码：初始化 w_l 权重 ====================
 
     # 1. 提取初始CKA相似度 (对角线元素)
@@ -147,6 +129,8 @@ def main():
     # 我们假设 model1_names 和 model2_names 中的层是一一对应的
     # cka_initial[l] 对应 ANN 和 SNN 第 l 个匹配层的 CKA 相似度
     cka_initial = np.diag(hsic)
+
+    np.set_printoptions(precision=3, suppress=True)
     print("Initial CKA similarity for matched layers (diagonal of HSIC matrix):")
     print(cka_initial)
 
@@ -186,9 +170,8 @@ def main():
     print("\nStarting Closed-Loop Fine-Tuning for SNN...")
 
     # 设置微调的超参数 (移到最开头)
-    
-    snnmodel_save_path = f"(T={T})best_snn_model.pth"
-    plot_save_prefix = f"(T={T})"
+
+    plot_save_prefix = f"(T={T}_{alpha},{beta})"
 
     # 打印训练参数
     print("--- Training Parameters ---")
@@ -233,6 +216,19 @@ def main():
     hsic_final = hsic_final.cpu().numpy()
 
     cka_final = np.diag(hsic_final)
+  
+    cka_results = {
+        'cka_matrix': hsic_final,
+        'snn_layer_names': model1_names,
+        'ann_layer_names': model2_names
+    }
+    
+    save_path = os.path.join(output_dir_cka, f'(T={T}_{alpha},{beta})key_layers_finetune_res18.npy')
+    np.save(save_path, cka_results)
+    
+    print(f"CKA results for key layers saved to: {save_path}")
+
+
     print("打印最终微调的模型的CKA值for matched layers (diagonal of HSIC matrix):")
     print(cka_final)
 

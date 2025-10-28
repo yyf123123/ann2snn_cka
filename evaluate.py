@@ -122,5 +122,3 @@ def evaluate_ann(ann_model: nn.Module, test_loader: DataLoader, device: torch.de
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
     return 100 * correct / total
-
-

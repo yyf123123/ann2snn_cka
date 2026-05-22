@@ -1,206 +1,221 @@
-# ANN2SNN with CKA Analysis
+# ANN2SNN-CKA: Closed-Loop CKA Distillation for ANN-to-SNN Conversion
 
-A comprehensive framework for converting Artificial Neural Networks (ANNs) to Spiking Neural Networks (SNNs) and analyzing their representational similarity using Centered Kernel Alignment (CKA).
+A research codebase for **high-fidelity ANN-to-SNN conversion** using **Closed-Loop CKA Distillation**.
 
-## Overview
+This repository implements the method described in:
 
-This project implements an ANN-to-SNN conversion pipeline with built-in performance analysis tools. It leverages the [SpikingJelly](https://github.com/fangwei123456/spikingjelly) library for efficient SNN conversion and uses CKA metrics to quantify the similarity between ANN and SNN representations across network layers.
+> **High-Fidelity ANN-to-SNN Conversion via Closed-Loop CKA Distillation**
 
-### Key Features
+The core idea: after converting a pre-trained ANN to an SNN via SpikingJelly, we improve conversion fidelity by fine-tuning the SNN with a combined loss that includes a **CKA-based feature alignment term** with adaptively weighted layers.
 
-- **ANN-to-SNN Conversion**: Seamless conversion of pre-trained ANNs to SNNs using SpikingJelly's ann2snn converter
-- **CKA-based Analysis**: Compute Centered Kernel Alignment to measure representational similarity between ANN and SNN layers
-- **Multiple Architectures**: Support for ResNet-18 and VGG-16 models
-- **CIFAR-10 Dataset**: Pre-configured data loading with augmentation
-- **Memory-Efficient Training**: Optimized CKA computation for SNN training without memory leaks
-- **Comprehensive Evaluation**: Tools for evaluating both ANN and SNN model performance
+---
 
-## Project Structure
+## Method Summary
+
+### Stage 1: ANN-to-SNN Conversion
+
+- Pre-trained ANN serves as the **teacher** (frozen).
+- SpikingJelly `ann2snn.Converter` performs: BN fusion, ReLU→IF neuron replacement, threshold normalization (99.9% activation-based calibration).
+
+### Stage 2: Closed-Loop CKA Distillation
+
+- **Teacher ANN** is frozen.
+- **Student SNN** is fine-tuned with a combined loss:
+
+```
+L_total = (1 - α) · L_task + α · (β · L_global + (1 - β) · L_local)
+```
+
+| Term | Description |
+|------|-------------|
+| `L_task` | Cross-entropy loss on ground-truth labels |
+| `L_global` | KL divergence between SNN and ANN output logits |
+| `L_local` | Weighted CKA feature alignment loss across layers |
+
+- Layer weights are adaptive, computed from initial CKA similarity:
+
+```
+w_l = (1 - CKA_l) / Σ_j(1 - CKA_j)
+```
+
+---
+
+## Current Release Scope
+
+| Included | Status |
+|----------|--------|
+| ResNet-18 / CIFAR-10 pipeline | **Primary entry** |
+| VGG-16 / CIFAR-10 pipeline | Retained |
+| CKA computation module | Included |
+| Combined loss functions | Included |
+| SNN fine-tuning loop | Included |
+| Model checkpoints | **Not provided** |
+| Paper PDF | **Not included** |
+| ImageNet pipeline | Not included in this release |
+
+---
+
+## Repository Structure
 
 ```
 ann2snn_cka/
-├── cka_compare.py                 # CKA similarity computation and analysis
-├── models.py                       # SNN model reconstruction utilities
-├── evaluate.py                     # Model evaluation functions
-├── loss_functions.py               # Custom loss functions
-├── train_snn.py                    # SNN training pipeline
-├── resnet18_cifar10.py            # ResNet-18 conversion and analysis
-├── vgg16_cifar10.py               # VGG-16 conversion and analysis
-├── model_cifar10_resnet.py        # ResNet-18 ANN model definition
-├── model_cifar10_vgg.py           # VGG-16 ANN model definition
-└── requirements.txt                # Python dependencies
+├── README.md
+├── LICENSE                        # MIT
+├── .gitignore
+├── requirements.txt
+├── resnet18_cifar10.py            # MAIN ENTRY: ResNet-18 / CIFAR-10
+├── vgg16_cifar10.py               # VGG-16 / CIFAR-10 (retained)
+├── cka_compare.py                 # CKA computation and layer analysis
+├── train_snn.py                   # Closed-loop SNN fine-tuning
+├── loss_functions.py              # Task, global KD, local CKA, combined loss
+├── models.py                      # SNN model reconstruction
+├── model_cifar10_resnet.py        # ResNet ANN model definition
+├── model_cifar10_vgg.py           # VGG ANN model definition
+├── evaluate.py                    # ANN/SNN evaluation utilities
+└── docs/
+    └── ai_context/                # AI agent context files
 ```
 
-## Core Components
-
-### 1. CKA Analysis (`cka_compare.py`)
-
-Implements the CKA metric for comparing feature representations:
-
-- **`CKA` class**: Main interface for similarity computation
-  - `similarity()`: Compute CKA for inference evaluation
-  - `cka_train()`: Memory-efficient variant for training with gradient flow
-  - `inference()`: Evaluate CKA across multiple layers with temporal averaging
-  - `hook_layer()`: Register hooks to capture intermediate layer outputs
-
-**Key Parameters:**
-- `snn_model`, `ann_model`: Models to compare
-- `batch_size`: Batch size for computations (default: 1024)
-- `repeat`: Number of evaluation repeats (default: 5)
-- `T`: Number of SNN timesteps (default: 50)
-
-### 2. Model Reconstruction (`models.py`)
-
-Rebuilds converted SNN models into structured architectures:
-
-- **`rebuild_snn_resnet18()`**: Convert flattened ResNet-18 SNN to hierarchical structure
-- **`rebuild_snn_vgg()`**: Reconstruct VGG-16 SNN with sequential features and classifier
-- **`SNNBasicBlock`**: Spiking version of ResNet BasicBlock
-- **`SNNVGGReconstructed`**: Spiking VGG model container
-
-### 3. Training and Evaluation
-
-- **`evaluate.py`**: Functions to evaluate model accuracy on test sets
-- **`train_snn.py`**: SNN training loop with CKA-based objectives
-- **`loss_functions.py`**: Custom loss functions for SNN training
+---
 
 ## Installation
 
-### Requirements
+```bash
+pip install -r requirements.txt
+```
 
+Key dependencies:
 - Python 3.8+
 - PyTorch 2.7.0
 - torchvision 0.22.0
 - SpikingJelly 0.0.0.0.14
-- CUDA 12.x (recommended for GPU acceleration)
+- CUDA 12.x (recommended)
 
-### Setup
+> **Note**: `requirements.txt` is a full frozen environment. A minimal version may be provided later.
 
-```bash
-# Clone the repository
-git clone <repository-url>
-cd ann2snn_cka
-
-# Install dependencies
-pip install -r requirements.txt
-```
+---
 
 ## Usage
 
-### Basic ANN-to-SNN Conversion and Analysis
+### ResNet-18 / CIFAR-10 (Primary)
 
-```python
-import torch
-from resnet18_cifar10 import main as run_resnet18
-from vgg16_cifar10 import main as run_vgg16
-
-# Convert ResNet-18 and analyze
-run_resnet18()
-
-# Convert VGG-16 and analyze
-run_vgg16()
+```bash
+python resnet18_cifar10.py
 ```
 
-### Manual CKA Computation
+This script performs the full closed-loop CKA distillation pipeline:
 
-```python
-from cka_compare import CKA
-from models import rebuild_snn_resnet18
+1. Load CIFAR-10 data
+2. Load pre-trained ResNet-18 teacher ANN
+3. Evaluate ANN accuracy
+4. Load pre-converted student SNN
+5. Evaluate initial SNN accuracy
+6. Compute initial CKA matrix
+7. Compute adaptive layer weights `w_l`
+8. Fine-tune SNN with combined loss
+9. Evaluate final SNN accuracy and CKA
 
-# Initialize CKA analyzer
-cka = CKA(snn_model=snn_model, ann_model=ann_model, device='cuda')
+### VGG-16 / CIFAR-10
 
-# Register hooks for layer analysis
-cka.hook_layer(lambda m: isinstance(m, torch.nn.Conv2d))
-
-# Compute similarity matrix
-similarity_matrix, snn_names, ann_names = cka.inference(test_loader)
-
-# Results: similarity_matrix[i, j] shows CKA between SNN layer i and ANN layer j
+```bash
+python vgg16_cifar10.py
 ```
 
-### Training with CKA Loss
+Secondary pipeline; retained but not the primary focus.
+
+### Fresh ANN-to-SNN Conversion
+
+Both scripts contain commented-out blocks for fresh conversion via SpikingJelly:
 
 ```python
-from cka_compare import CKA
-
-# Compute CKA for training (memory-efficient)
-cka_loss = CKA.cka_train(snn_features, ann_features, kernel='linear')
-
-# Use in your training loop
-loss = cka_loss
-loss.backward()
-optimizer.step()
+# converter = ann2snn.Converter(mode='99.9%', dataloader=train_data_loader)
+# snn_model = converter(model)
+# rebuilt_snn = rebuild_snn_resnet18(model, snn_model)
+# torch.save(rebuilt_snn, snn_save_path)
 ```
 
-## Technical Details
+---
 
-### CKA Metric
+## Checkpoints and Data
 
-Centered Kernel Alignment measures the similarity between two sets of representations:
+**This repository does NOT provide model checkpoints.**
 
-$$\text{CKA}(X, Y) = \frac{\text{HSIC}(\mathbf{K}, \mathbf{L})}{\sqrt{\text{HSIC}(\mathbf{K}, \mathbf{K}) \cdot \text{HSIC}(\mathbf{L}, \mathbf{L})}}$$
+Users must prepare the following files:
 
-Where K and L are centered Gram matrices of X and Y respectively.
+| File | Purpose |
+|------|---------|
+| Pre-trained ANN weights (`.pth`) | Teacher model |
+| Pre-converted SNN weights (`.pth`) | Student model before fine-tuning |
 
-### SNN Conversion Process
+Current scripts contain author-local absolute paths (e.g., `/home/lbz/git-hub/...`). These are intentionally preserved in the initial release. Users should adjust paths manually or wait for a future `argparse` update.
 
-1. Train ANN model on CIFAR-10
-2. Convert ANN to SNN using SpikingJelly's ann2snn converter
-3. Rebuild flattened SNN structure to match original architecture
-4. Evaluate temporal dynamics over T timesteps
-5. Analyze layer-wise similarity using CKA
+CIFAR-10 is downloaded automatically by `torchvision`.
 
-### Memory Optimization
+---
 
-The `cka_train()` method optimizes memory usage by:
-- Computing Gram matrices in `no_grad` context
-- Reintroducing gradients only through HSIC values
-- Preventing intermediate tensors from holding computation graphs
+## Results
 
-## Experimental Results
+### Paper-Reported Results
 
-The framework enables:
-- **Accuracy Comparison**: ANN vs SNN classification performance on CIFAR-10
-- **Representational Analysis**: Layer-by-layer CKA similarity scores
-- **Temporal Dynamics**: How SNN representations evolve across timesteps
-- **Training Optimization**: Using CKA as a regularization objective
+The paper reports that closed-loop CKA distillation substantially improves ANN-to-SNN conversion fidelity, achieving near-lossless accuracy at moderate-to-high time steps (e.g., T=32) and improved CKA similarity across layers.
+
+### Repository-Reproduced Results
+
+**Status**: To be reproduced.
+
+This repository provides code infrastructure. Verified reproduction logs are not yet included. Users should run the pipeline in their own environment after preparing the required checkpoints and verify results independently.
+
+---
+
+## Documentation for AI Agents
+
+The `docs/ai_context/` directory contains structured documentation for AI coding agents (Claude Code, Codex, etc.):
+
+| File | Content |
+|------|---------|
+| `00_PROJECT_OVERVIEW.md` | Short summary for agents |
+| `01_METHOD_TO_CODE_MAP.md` | Paper method → source file mapping |
+| `02_REPOSITORY_STRUCTURE_CURRENT.md` | File layout and gitignore policy |
+| `03_REPRODUCTION_PROTOCOL.md` | How to run and reproduce |
+| `04_RESULTS_AND_CLAIMS.md` | Paper vs. repository results policy |
+| `05_MANUAL_CHECKLIST.md` | What is confirmed vs. pending |
+| `06_CURRENT_REPO_AUDIT.md` | Known issues and risk items |
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
 
 ## Citation
 
-If you use this code in your research, please cite:
+If you use this code in your research, please cite the associated paper (metadata to be finalized):
 
 ```bibtex
-@project{ann2snn_cka,
-  title={ANN2SNN with CKA Analysis},
-  year={2024}
+@article{ann2snn_cka,
+  title   = {High-Fidelity ANN-to-SNN Conversion via Closed-Loop CKA Distillation},
+  author  = {},
+  journal = {},
+  year    = {}
 }
 ```
 
 Also cite SpikingJelly:
+
 ```bibtex
 @article{fang2020spikingjelly,
-  title={SpikingJelly: An open-source learning framework for spiking neural networks},
-  author={Fang, Wei and Chen, Yanqi and others},
-  journal={arXiv preprint arXiv:2212.10805},
-  year={2022}
+  title   = {SpikingJelly: An open-source learning framework for spiking neural networks},
+  author  = {Fang, Wei and Chen, Yanqi and others},
+  journal = {arXiv preprint arXiv:2212.10805},
+  year    = {2022}
 }
 ```
 
-## License
+---
 
-This project is open source and available under the MIT License.
+## Acknowledgments
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues and pull requests.
-
-## References
-
-- [SpikingJelly](https://github.com/fangwei123456/spikingjelly) - SNN Library
-- [CKA: An unbiased measure of feature importance](https://arxiv.org/abs/1905.05172)
-- [ANN-to-SNN Conversion Survey](https://arxiv.org/abs/2303.13778)
-
-## Contact
-
-For questions or suggestions, please open an issue on GitHub.
+- [SpikingJelly](https://github.com/fangwei123456/spikingjelly) for the ANN-to-SNN conversion framework.
+- CKA methodology based on [Kornblith et al. (ICML 2019)](https://arxiv.org/abs/1905.05172).

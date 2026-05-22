@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+.env
+.venv/
+venv/
+conda-meta/
+
+# System
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Data and datasets
+data/
+datasets/
+
+# Model checkpoints
+checkpoints/
+pretrained_models/
+*.pth
+*.pt
+*.ckpt
+*.onnx
+
+# Outputs
+outputs/
+logs/
+wandb/
+runs/
+lightning_logs/
+
+# CKA results (generated)
+cka_results/
+cka_results_vgg/
+
+# Generated files
+*.npy
+*.npz
+*.png
+*.jpg
+*.jpeg
+
+# Paper and documents (not in repo)
+*.pdf
+
+# Claude Code local settings
+.claude/

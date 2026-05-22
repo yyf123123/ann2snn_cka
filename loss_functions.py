@@ -111,3 +111,4 @@ class CombinedLoss(nn.Module):
         l_total = (1 - self.alpha) * l_task + self.alpha * (self.beta * l_global + (1 - self.beta) * l_local)
         
         return l_total, l_task, l_global, l_local
+

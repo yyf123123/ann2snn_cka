@@ -169,17 +169,12 @@ This repository provides code infrastructure. Verified reproduction logs are not
 
 ## Documentation for AI Agents
 
-The `docs/ai_context/` directory contains structured documentation for AI coding agents (Claude Code, Codex, etc.):
-
-| File | Content |
-|------|---------|
-| `00_PROJECT_OVERVIEW.md` | Short summary for agents |
-| `01_METHOD_TO_CODE_MAP.md` | Paper method → source file mapping |
-| `02_REPOSITORY_STRUCTURE_CURRENT.md` | File layout and gitignore policy |
-| `03_REPRODUCTION_PROTOCOL.md` | How to run and reproduce |
-| `04_RESULTS_AND_CLAIMS.md` | Paper vs. repository results policy |
-| `05_MANUAL_CHECKLIST.md` | What is confirmed vs. pending |
-| `06_CURRENT_REPO_AUDIT.md` | Known issues and risk items |
+- `docs/PAPER_CONTEXT.md` — Quick paper-to-code mapping (read this first).
+- `docs/ai_context/` — Detailed documentation for AI coding agents (Claude Code, etc.):
+  - `00_PROJECT_OVERVIEW.md` — Short summary for agents
+  - `01_METHOD_TO_CODE_MAP.md` — Paper method → source file mapping
+  - `03_REPRODUCTION_PROTOCOL.md` — How to run and reproduce
+  - `06_CURRENT_REPO_AUDIT.md` — Known issues and risk items
 
 ---
 
